@@ -6,56 +6,57 @@ const path = require('path')
 const http2 = require('http2')
 const helper = require('./lib/getFiles')
 
-const { HTTP2_HEADER_PATH } = http2.constants
+const {HTTP2_HEADER_PATH} = http2.constants
 const PORT = process.env.PORT || 8444
 const PUBLIC_PATH = path.join(__dirname, '../public')
 
 const publicFiles = helper.getFiles(PUBLIC_PATH)
 const server = http2.createSecureServer({
-  key: fs.readFileSync('./ssl/2_node.redream.cn.key'),
-  cert: fs.readFileSync('./ssl/1_node.redream.cn_bundle.crt')
+    key: fs.readFileSync('./ssl/2_node.redream.cn.key'),
+    cert: fs.readFileSync('./ssl/1_node.redream.cn_bundle.crt')
 }, onRequest)
 
 // Push file
 function push (stream, path) {
-  const file = publicFiles.get(path)
+    //支持push GET HEAD请求，需要带上参数
+    const file = publicFiles.get(path)
 
-  if (!file) {
-    return
-  }
+    if (!file) {
+        return
+    }
 
-  stream.pushStream({ [HTTP2_HEADER_PATH]: path }, (pushStream) => {
-    pushStream.respondWithFD(file.fileDescriptor, file.headers)
-  })
+    stream.pushStream({[HTTP2_HEADER_PATH]: path}, (pushStream) => {
+        pushStream.respondWithFD(file.fileDescriptor, file.headers)
+    })
 }
 
 // Request handler
 function onRequest (req, res) {
-  const reqPath = req.url === '/' ? '/index.html' : req.url
-  const file = publicFiles.get(reqPath)
+    const reqPath = req.url === '/' ? '/index.html' : req.url
+    const file = publicFiles.get(reqPath)
 
-  // File not found
-  if (!file) {
-    res.statusCode = 404
-    res.end()
-    return
-  }
+    // File not found
+    if (!file) {
+        res.statusCode = 404
+        res.end()
+        return
+    }
 
-  // Push with index.html
-  if (reqPath === '/index.html') {
-    push(res.stream, '/index.css')
-    // push(res.stream, '/bundle2.js')
-  }
+    // Push with index.html
+    if (reqPath === '/index.html') {
+        push(res.stream, '/index.css')
+        push(res.stream, '/push.css')                 //没有请求的数据push了浏览器也不解析？
+    }
 
-  // Serve file
-  res.stream.respondWithFD(file.fileDescriptor, file.headers)
+    // Serve file
+    res.stream.respondWithFD(file.fileDescriptor, file.headers)
 }
 
 server.listen(PORT, (err) => {
-  if (err) {
-    console.error(err)
-    return
-  }
+    if (err) {
+        console.error(err)
+        return
+    }
 
-  console.log(`Server listening on ${PORT}`)
+    console.log(`Server listening on ${PORT}`)
 })
